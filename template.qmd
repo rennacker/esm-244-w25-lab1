@@ -1,6 +1,9 @@
 ---
-title: "Template"
-format: html
+title: "Lab 1 workup"
+format: 
+  html:
+    code-fold: true
+    toc: true
 execute:
   eval: false
 ---
@@ -14,13 +17,15 @@ library(tidyverse)
 library(sf)
 library(here)
 library(tmap)
+library(janitor)
 ```
 
 
 What do we need to change to get the data to load in the following chunk?
 
 ```{r}
-sfo_trees_df<-read_csv(here("data","trees")) |> janitor::clean_names()
+sfo_trees_df <- read_csv(here("data", "sfo_trees", "sfo_trees.csv")) |>
+  janitor::clean_names()
 ```
 
 ## Part 1: Data exploration
@@ -31,8 +36,37 @@ What are some interesting questions you could ask about the data?
 
 Write them below:
 
+what is the significance of site order? 
+Is there correlation? 
+How many counts of each observation by legal_status? Focus on the highest tree? 
 
+FROM THE KEY
+sfo_trees_df %>% 
+  group_by(legal_status) %>% 
+  summarize(tree_count = n()) %>%
+  ungroup()
 
+# Way 2: Same thing (+ a few other dplyr functions)
+top_5_status <- sfo_trees_df %>% 
+  filter(!is.na(legal_status)) %>% 
+  ### drop_na(legal_status) %>% ### same thing!
+  group_by(legal_status) %>% 
+  summarize(tree_count = n()) %>%
+  ungroup() %>%
+  slice_max(tree_count, n = 5) %>% 
+  arrange(-tree_count)
+
+```{r}
+top_5_status <- sfo_trees_df |>
+  drop_na(legal_status)filter(!is.na(legal_status)) |>
+  ### filter(!is.na(legal_status)) |>### same thing!
+  group_by(legal_status) |>
+  summarize(tree_count = n()) |>
+  ungroup() |>
+  slice_max(tree_count, n = 5) |>
+  arrange(tree_count)
+
+```
 
 
 
@@ -44,8 +78,16 @@ Write them below:
 Describe what this piece of code does. Feel free to run it to help you understand
 
 ```{r}
-permitted_mta_dpw<-sfo_trees_df |> 
-  filter(legal_status == 'Permitted Site' & %in% c("MTA","DPW"))
+#permitted_mta_dpw<-sfo_trees_df |> 
+ # filter(legal_status == 'Permitted Site' & %in% c("MTA","DPW"))
+
+permitted_mta_dpw <- sfo_trees_df |>
+  filter(legal_status %in% c("Permitted Site", "Undocumented"))
+
+#ex<-seq(1:10)
+
+#ex %in% c(1,2,11)  
+  
 ```
 
 
@@ -62,7 +104,9 @@ Our boss tasked us with identifying oak and pine trees in SF based on legal stat
 
 Write pseudocode on how you would solve it
 
-
+get rid of all columns not what we want #filter()
+filter out plants that are not pine or oak
+summarize the counts of the oak and pines
 
 
 
@@ -73,7 +117,11 @@ Data wrangle done below:
 
 
 ```{r}
-
+oak_pine_df <- sfo_trees_df |> 
+  filter(str_detect(species, "Oak")| str_detect(species, "Pine")) |> 
+  select(species, legal_status, plant_date, latitude, longitude)|>
+  mutate(type=ifelse(str_detect(species, "Oak"), "Oak", "Pine"))
+  
 ```
 
 
@@ -81,8 +129,8 @@ Summary stats
 
 ```{r}
 oak_pine_count<-oak_pine_df |> 
-  group_by(legal_status,type)
-  summarize(count=n())
+  group_by(legal_status,type) |>
+  summarise(count=n())
 ```
 
 
@@ -90,7 +138,11 @@ oak_pine_count<-oak_pine_df |>
 Plot the locations of the trees as a scatterplot
 
 ```{r}
-
+ggplot(data=oak_pine_df, aes(x=longitude, y=latitude, color=type))+
+  geom_point()+
+  theme_minimal()+
+  theme(axis.title = element_blank())+
+  labs(color='Tree type')
 ```
 
 
@@ -100,7 +152,7 @@ Plot the locations of the trees as a scatterplot
 Why have a list of native trees in the data folder.
 
 ```{r}
-ca_native_df<-read_csv(here('data/sfo/ca_native_spp.csv'))
+ca_native_df<-read_csv(here('data/sfo_trees/ca_native_spp.csv'))
 
 # Why can I use this format instead of the usual here("data","folder","file")?
 ```
@@ -120,8 +172,26 @@ How to extract the year from the plant data column when it looks like "2022-11-1
 lubridate::year("2022-11-16")
 ```
 
+
 ```{r}
-oak_pine_year_df<-????
+sfo_trees_native <- sfo_trees_df |> 
+  separate(species, into=c('spp_sci','spp_common'), sep=' :: ') |>
+  select(starts_with('spp'), 'plant_date', 'legal_status','longitude','latitude')|>
+  mutate(ca_native=(spp_sci %in% ca_native_df$scientific_name))
+```
+
+
+
+```{r}
+oak_pine_year_df <- sfo_trees_native |>
+  filter(spp_sci %in% c('Quercus agrifolia', 'Pinus radiata')) |>
+           mutate(plant_year=lubridate::year(plant_date))
+  
+  
+  #input into a t.test
+#issues#
+  t.test(oak_pine_year_df)
+  
 ```
 
 
